@@ -1,6 +1,6 @@
 scriptTitle = "Batch Title Update Downloader"
 scriptAuthor = "Li Haifeng"
-scriptVersion = 1.4
+scriptVersion = 1.5
 scriptDescription = "Batch-download the latest Title Update for every game in Aurora from XboxUnity."
 scriptIcon = "icon.png"
 scriptPermissions = { "http", "filesystem", "content", "sql" }
@@ -337,7 +337,6 @@ local function WriteFailureLog(stats, mode)
 		"Games found: " .. tostring(stats.total),
 		"Installed/refreshed: " .. tostring(stats.installed),
 		"Skipped existing: " .. tostring(stats.skippedExisting),
-		"Already current: " .. tostring(stats.alreadyCurrent),
 		"No TU on XboxUnity: " .. tostring(stats.noTU),
 		"Failed: " .. tostring(stats.failed),
 		"",
@@ -373,7 +372,6 @@ local function MakeSummary(stats, mode)
 	text = text .. "Games found: " .. tostring(stats.total) .. "\n";
 	text = text .. "Installed/refreshed: " .. tostring(stats.installed) .. "\n";
 	text = text .. "Skipped existing: " .. tostring(stats.skippedExisting) .. "\n";
-	text = text .. "Already current: " .. tostring(stats.alreadyCurrent) .. "\n";
 	text = text .. "No TU on XboxUnity: " .. tostring(stats.noTU) .. "\n";
 	text = text .. "Failed: " .. tostring(stats.failed) .. "\n";
 
@@ -453,21 +451,7 @@ function main()
 				game.Name, TitleHex(game.TitleId), TitleHex(game.BaseVersion),
 				tostring(apiError or "")));
 		else
-			local exactInstalled = false;
-			for _, row in ipairs(installedRows) do
-				if HashesMatch(row.Hash, latest.tuhash) then
-					exactInstalled = true;
-					break;
-				end
-			end
-
-			if exactInstalled then
-				stats.alreadyCurrent = stats.alreadyCurrent + 1;
-				print(string.format(
-					"CURRENT: %s TU%s",
-					game.Name, tostring(latest.version)));
-
-			elseif mode == MODE_SKIP_EXISTING and #installedRows > 0 then
+			if mode == MODE_SKIP_EXISTING and #installedRows > 0 then
 				stats.skippedExisting = stats.skippedExisting + 1;
 				print(string.format(
 					"SKIP existing: %s [%s/%s]",
