@@ -1,6 +1,6 @@
 scriptTitle = "Batch Title Update Downloader"
 scriptAuthor = "Li Haifeng"
-scriptVersion = 1.3
+scriptVersion = 1.4
 scriptDescription = "Batch-download the latest Title Update for every game in Aurora from XboxUnity."
 scriptIcon = "icon.png"
 scriptPermissions = { "http", "filesystem", "content", "sql" }
@@ -438,58 +438,63 @@ function main()
 			index, #games, game.Name));
 
 		local installedRows = GetInstalledRows(game);
-		if mode == MODE_SKIP_EXISTING and #installedRows > 0 then
-			stats.skippedExisting = stats.skippedExisting + 1;
+
+		local listUrl = string.format(
+			"%s/tu/%08X/%08X",
+			API_BASE, game.TitleId, game.BaseVersion);
+
+		local tus, apiError = HttpJson(listUrl);
+		local latest = FindLatestTU(tus);
+
+		if latest == nil then
+			stats.noTU = stats.noTU + 1;
 			print(string.format(
-				"SKIP existing: %s [%s/%s]",
-				game.Name, TitleHex(game.TitleId), TitleHex(game.BaseVersion)));
+				"NO TU: %s [%s/%s] %s",
+				game.Name, TitleHex(game.TitleId), TitleHex(game.BaseVersion),
+				tostring(apiError or "")));
 		else
-			local listUrl = string.format(
-				"%s/tu/%08X/%08X",
-				API_BASE, game.TitleId, game.BaseVersion);
-			local tus, apiError = HttpJson(listUrl);
-			local latest = FindLatestTU(tus);
-
-			if latest == nil then
-				stats.noTU = stats.noTU + 1;
-				print(string.format(
-					"NO TU: %s [%s/%s] %s",
-					game.Name, TitleHex(game.TitleId), TitleHex(game.BaseVersion),
-					tostring(apiError or "")));
-			else
-				local exactInstalled = false;
-				for _, row in ipairs(installedRows) do
-					if HashesMatch(row.Hash, latest.tuhash) then
-						exactInstalled = true;
-						break;
-					end
+			local exactInstalled = false;
+			for _, row in ipairs(installedRows) do
+				if HashesMatch(row.Hash, latest.tuhash) then
+					exactInstalled = true;
+					break;
 				end
+			end
 
-				if mode ~= MODE_OVERWRITE and exactInstalled then
-					stats.alreadyCurrent = stats.alreadyCurrent + 1;
+			if exactInstalled then
+				stats.alreadyCurrent = stats.alreadyCurrent + 1;
+				print(string.format(
+					"CURRENT: %s TU%s",
+					game.Name, tostring(latest.version)));
+
+			elseif mode == MODE_SKIP_EXISTING and #installedRows > 0 then
+				stats.skippedExisting = stats.skippedExisting + 1;
+				print(string.format(
+					"SKIP existing: %s [%s/%s]",
+					game.Name, TitleHex(game.TitleId), TitleHex(game.BaseVersion)));
+
+			else
+				Script.SetStatus(string.format(
+					"[%d/%d] Downloading %s TU%s",
+					index, #games, game.Name, tostring(latest.version)));
+
+				local ok, result = DownloadAndRegister(
+					game, latest, drive, mode == MODE_OVERWRITE);
+
+				if ok then
+					stats.installed = stats.installed + 1;
 					print(string.format(
-						"CURRENT: %s TU%s",
-						game.Name, tostring(latest.version)));
+						"OK: %s TU%s (%s)",
+						game.Name, tostring(latest.version), tostring(result)));
 				else
-					Script.SetStatus(string.format(
-						"[%d/%d] Downloading %s TU%s",
-						index, #games, game.Name, tostring(latest.version)));
+					stats.failed = stats.failed + 1;
 
-					local ok, result = DownloadAndRegister(
-						game, latest, drive, mode == MODE_OVERWRITE);
-					if ok then
-						stats.installed = stats.installed + 1;
-						print(string.format(
-							"OK: %s TU%s (%s)",
-							game.Name, tostring(latest.version), tostring(result)));
-					else
-						stats.failed = stats.failed + 1;
-						local failure = string.format(
-							"%s [%s]: %s",
-							game.Name, TitleHex(game.TitleId), tostring(result));
-						table.insert(stats.failures, failure);
-						print("FAILED: " .. failure);
-					end
+					local failure = string.format(
+						"%s [%s]: %s",
+						game.Name, TitleHex(game.TitleId), tostring(result));
+
+					table.insert(stats.failures, failure);
+					print("FAILED: " .. failure);
 				end
 			end
 		end
