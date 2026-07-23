@@ -1,6 +1,6 @@
 scriptTitle = "Batch Title Update Downloader"
 scriptAuthor = "Li Haifeng"
-scriptVersion = 1.5
+scriptVersion = 1.6
 scriptDescription = "Batch-download the latest Title Update for every game in Aurora from XboxUnity."
 scriptIcon = "icon.png"
 scriptPermissions = { "http", "filesystem", "content", "sql" }
@@ -189,6 +189,23 @@ local function ValidateTU(tu)
 	return true, nil;
 end
 
+local function EnableTitleUpdate(titleUpdateId)
+	if titleUpdateId == nil then
+		return false;
+	end
+
+	local active = Sql.ExecuteFetchRows(
+		"SELECT Id FROM ActiveTitleUpdates WHERE TitleUpdateId = " .. tostring(titleUpdateId));
+
+	if type(active) == "table" and #active > 0 then
+		return true;
+	end
+
+	return Sql.Execute(
+		"INSERT INTO ActiveTitleUpdates (TitleUpdateId) VALUES (" ..
+		tostring(titleUpdateId) .. ")");
+end
+
 local function RegisterTitleUpdate(game, tu, drive, backupFile, livePath, overwrite)
 	local exists = Sql.ExecuteFetchRows(string.format(
 		"SELECT Id FROM TitleUpdates WHERE TitleId = %s AND Hash = %s AND LiveDeviceId = %s",
@@ -215,7 +232,9 @@ local function RegisterTitleUpdate(game, tu, drive, backupFile, livePath, overwr
 		if Sql.Execute(update) ~= true then
 			return false, "could not refresh Aurora database row";
 		end
-		return true, "refreshed";
+		EnableTitleUpdate(rowId);
+
+		return true, "refreshed and enabled";
 	end
 
 	if alreadyRegistered then
@@ -239,7 +258,15 @@ local function RegisterTitleUpdate(game, tu, drive, backupFile, livePath, overwr
 	if Sql.Execute(insert) ~= true then
 		return false, "could not add TU to Aurora database";
 	end
-	return true, "installed";
+	local newRow = Sql.ExecuteFetchRows(string.format(
+		"SELECT Id FROM TitleUpdates WHERE TitleId = %s AND Hash = %s AND LiveDeviceId = %s",
+		Int32(game.TitleId), SqlStr(tu.tuhash), SqlStr(drive.Serial)));
+
+	if type(newRow) == "table" and #newRow > 0 then
+		EnableTitleUpdate(tonumber(newRow[1].Id));
+	end
+
+	return true, "installed and enabled";
 end
 
 local function DownloadAndRegister(game, tu, drive, overwrite)
