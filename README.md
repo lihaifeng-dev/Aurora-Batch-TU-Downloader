@@ -9,7 +9,7 @@ Automatically scans Aurora games, downloads the latest TU from XboxUnity, and up
 Copy the script folder to:
 
 ```
-Hdd1:\Aurora\User\Scripts\
+Hdd1:\Aurora\User\Scripts\Utility
 ```
 
 Restart Aurora and launch:
